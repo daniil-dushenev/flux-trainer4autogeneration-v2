@@ -1,0 +1,40 @@
+[project]
+name = "flux-lora-pipeline"
+version = "0.1.0"
+description = "Pipeline for training Flux LoRA adapters and generating synthetic class data"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Your Name" }]
+
+dependencies = [
+  "typer>=0.12",
+  "pydantic>=2.6",
+  "PyYAML>=6.0",
+  "tqdm>=4.66",
+  "Pillow>=10.0",
+  "numpy>=1.24",
+  "fal-client>=0.7.0",
+  "torch>=2.0",
+  "diffusers",
+  "transformers>=5.0.0",
+  "accelerate>=0.31.0",
+  "peft>=0.17.0",
+  "safetensors>=0.4.3",
+  "ftfy",
+  "tensorboard",
+  "sentencepiece",
+]
+
+[project.scripts]
+fluxpipe = "flux_lora_pipeline.cli.main:app"
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

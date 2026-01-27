@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.venv/
+.venv*/
+.env
+
+# Caches
+.cache/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Logs
+*.log
+
+# Project artifacts
+outputs/
+synthetic/
+
+# Third-party
+.third_party/
+
+# Local scripts
+/delete_pngs.py
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,71 @@
+project_name: "Magnetic Tile Blowhole"
+class_name: "blowhole"
+class_prompt: "a photo of {class_name}"
+
+data:
+  images_dir: "/root/MT_Blowhole/Imgs"
+  captions_dir: null
+  resolution: 768
+  repeats: 1
+
+train:
+  output_dir: "outputs"
+  lora_rank: 32
+  learning_rate: 0.001
+  steps: 1000
+  batch_size: 1
+  seed: 42
+  command: null
+  command_workdir: null
+
+generate:
+  out_dir: "synthetic"
+  num_images: 10
+  guidance_scale: 1.0
+  steps: 25
+  seed: 123
+  height: 512
+  width: 512
+  lora_path: "outputs"
+  lora_scale: 4.5
+
+flux:
+  backend: "diffusers_flux2"
+  model_path: "black-forest-labs/FLUX.2-klein-base-4B"
+  transformer_path: null
+  revision: null
+  dtype: "bf16"
+  device: "cuda"
+  enable_cpu_offload: false
+
+diffusers_train:
+  script_path: ".third_party/diffusers/examples/dreambooth/train_dreambooth_lora_flux2_klein.py"
+  pretrained_model_name_or_path: "black-forest-labs/FLUX.2-klein-base-4B"
+  resolution: 512
+  train_batch_size: 1
+  max_train_steps: 1000
+  learning_rate: 0.001
+  gradient_accumulation_steps: 1
+  gradient_checkpointing: true
+  cache_latents: true
+  mixed_precision: "bf16"
+  repeats: 10
+  seed: 42
+  output_dir: "outputs"
+
+fal_train:
+  app: "fal-ai/flux-2-trainer-v2"
+  steps: 1000
+  learning_rate: 0.00005
+  default_caption: "a photo of {class_name}"
+  output_lora_format: "fal"
+  data_zip: null
+
+fal_generate:
+  app: "fal-ai/flux-2/klein/4b/base/lora"
+  lora_path: null
+  num_images: 4
+  guidance_scale: 3.5
+  steps: 30
+  height: 768
+  width: 768
