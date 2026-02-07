@@ -1,60 +1,71 @@
-project_name: "Magnetic Tile Blowhole"
-class_name: "blowhole"
-class_prompt: "a photo of {class_name}"
+project_name: "Magnetic Tile crack"
+class_name: "crack"
+class_prompt: "a photo of Magnetic Tile {class_name}"
 
 data:
-  images_dir: "/root/MT_Blowhole/Imgs"
+  images_dir: "/root/MT_Crack/Imgs"
   captions_dir: null
   resolution: 768
   repeats: 1
 
 train:
   output_dir: "outputs"
-  lora_rank: 32
-  learning_rate: 0.001
-  steps: 1000
-  batch_size: 1
+  lora_rank: 64
+  lora_alpha: 8
+  lora_dropout: 0.08
+  learning_rate: 0.005
+  steps: 600
+  batch_size: 4
   seed: 42
   command: null
   command_workdir: null
 
 generate:
   out_dir: "synthetic"
-  num_images: 10
-  guidance_scale: 1.0
-  steps: 25
+  num_images: 8
+  guidance_scale: 2.5
+  steps: 24
   seed: 123
-  height: 512
-  width: 512
+  height: 384
+  width: 384
   lora_path: "outputs"
-  lora_scale: 4.5
+  lora_scale: 1.0
 
 flux:
-  backend: "diffusers_flux2"
-  model_path: "black-forest-labs/FLUX.2-klein-base-4B"
+  backend: "diffusers_flux2_dev"
+  model_path: "black-forest-labs/FLUX.2-dev"
   transformer_path: null
+  use_bnb_4bit_for_inference: false
   revision: null
   dtype: "bf16"
   device: "cuda"
-  enable_cpu_offload: false
+  enable_cpu_offload: true
 
 diffusers_train:
-  script_path: ".third_party/diffusers/examples/dreambooth/train_dreambooth_lora_flux2_klein.py"
-  pretrained_model_name_or_path: "black-forest-labs/FLUX.2-klein-base-4B"
-  resolution: 512
+  script_path: ".third_party/diffusers/examples/dreambooth/train_dreambooth_lora_flux2.py"
+  pretrained_model_name_or_path: "black-forest-labs/FLUX.2-dev"
+  resolution: 384
   train_batch_size: 1
-  max_train_steps: 1000
-  learning_rate: 0.001
-  gradient_accumulation_steps: 1
+  max_train_steps: 600
+  learning_rate: 0.00007
+  gradient_accumulation_steps: 2
   gradient_checkpointing: true
   cache_latents: true
+  offload: true
+  remote_text_encoder: false
+  use_8bit_adam: true
+  optimizer: "adamW"
+  guidance_scale: 1.0
+  lr_scheduler: "constant_with_warmup"
+  lr_warmup_steps: 60
+  bnb_quantization_config_path: "configs/bnb_4bit_flux2.json"
   mixed_precision: "bf16"
-  repeats: 10
+  repeats: 1
   seed: 42
   output_dir: "outputs"
 
 fal_train:
-  app: "fal-ai/flux-2-trainer-v2"
+  app: "fal-ai/flux-2/dev/trainer"
   steps: 1000
   learning_rate: 0.00005
   default_caption: "a photo of {class_name}"
@@ -62,9 +73,9 @@ fal_train:
   data_zip: null
 
 fal_generate:
-  app: "fal-ai/flux-2/klein/4b/base/lora"
+  app: "fal-ai/flux-2/dev"
   lora_path: null
-  num_images: 4
+  num_images: null
   guidance_scale: 3.5
   steps: 30
   height: 768

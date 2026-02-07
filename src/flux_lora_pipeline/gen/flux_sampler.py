@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import json
+import os
 import random
+
+from pathlib import Path
 
 from PIL import Image, ImageEnhance
 
@@ -45,10 +49,10 @@ def generate_synthetic(cfg: PipelineConfig) -> None:
                 out.save(out_path, quality=92)
         return
 
-    if cfg.flux.backend == "diffusers_flux2":
+    if cfg.flux.backend in {"diffusers_flux2", "diffusers_flux2_dev"}:
         _generate_flux2_diffusers(cfg)
         return
-    if cfg.flux.backend == "fal_flux2":
+    if cfg.flux.backend in {"fal_flux2", "fal_flux2_dev"}:
         _generate_flux2_fal(cfg)
         return
 
@@ -67,26 +71,40 @@ def _dtype_from_cfg(dtype: str):
 
 def _generate_flux2_diffusers(cfg: PipelineConfig) -> None:
     import torch
-    from diffusers import Flux2KleinPipeline, Flux2Transformer2DModel
+    from diffusers import BitsAndBytesConfig, Flux2Pipeline
 
     ensure_dir(cfg.generate.out_dir)
+    os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
     dtype = _dtype_from_cfg(cfg.flux.dtype)
 
     if cfg.flux.transformer_path:
-        transformer = Flux2Transformer2DModel.from_pretrained(
-            cfg.flux.transformer_path,
-            torch_dtype=dtype,
-        )
-        pipe = Flux2KleinPipeline.from_pretrained(
+        try:
+            from diffusers import Flux2Transformer2DModel as TransformerCls
+        except Exception:
+            from diffusers import FluxTransformer2DModel as TransformerCls
+
+        transformer = TransformerCls.from_pretrained(cfg.flux.transformer_path, torch_dtype=dtype)
+        pipe = Flux2Pipeline.from_pretrained(cfg.flux.model_path, transformer=transformer, torch_dtype=dtype)
+    elif cfg.flux.use_bnb_4bit_for_inference and cfg.diffusers_train.bnb_quantization_config_path:
+        try:
+            from diffusers import Flux2Transformer2DModel as TransformerCls
+        except Exception:
+            from diffusers import FluxTransformer2DModel as TransformerCls
+
+        with open(cfg.diffusers_train.bnb_quantization_config_path, "r") as f:
+            quant_cfg_data = json.load(f)
+        if quant_cfg_data.get("load_in_4bit"):
+            quant_cfg_data["bnb_4bit_compute_dtype"] = dtype
+        quantization_config = BitsAndBytesConfig(**quant_cfg_data)
+        transformer = TransformerCls.from_pretrained(
             cfg.flux.model_path,
-            transformer=transformer,
+            subfolder="transformer",
+            quantization_config=quantization_config,
             torch_dtype=dtype,
         )
+        pipe = Flux2Pipeline.from_pretrained(cfg.flux.model_path, transformer=transformer, torch_dtype=dtype)
     else:
-        pipe = Flux2KleinPipeline.from_pretrained(
-            cfg.flux.model_path,
-            torch_dtype=dtype,
-        )
+        pipe = Flux2Pipeline.from_pretrained(cfg.flux.model_path, torch_dtype=dtype)
 
     if cfg.flux.enable_cpu_offload:
         pipe.enable_model_cpu_offload()
@@ -94,7 +112,18 @@ def _generate_flux2_diffusers(cfg: PipelineConfig) -> None:
         pipe.to(cfg.flux.device)
 
     if cfg.generate.lora_path:
-        pipe.load_lora_weights(str(cfg.generate.lora_path))
+        lora_path = Path(cfg.generate.lora_path)
+        if lora_path.is_dir():
+            safetensors = sorted(lora_path.glob("*.safetensors"))
+            if not safetensors:
+                safetensors = sorted(lora_path.rglob("*.safetensors"))
+            if safetensors:
+                chosen = next((p for p in safetensors if p.name == "pytorch_lora_weights.safetensors"), safetensors[0])
+                pipe.load_lora_weights(str(chosen.parent), weight_name=chosen.name)
+            else:
+                pipe.load_lora_weights(str(lora_path))
+        else:
+            pipe.load_lora_weights(str(lora_path))
         if cfg.generate.lora_scale != 1.0 and hasattr(pipe, "set_adapters"):
             try:
                 pipe.set_adapters(["default"], adapter_weights=[cfg.generate.lora_scale])
@@ -135,12 +164,13 @@ def _generate_flux2_fal(cfg: PipelineConfig) -> None:
             lora_path = fallback.read_text().strip()
 
     prompt = cfg.class_prompt.format(class_name=cfg.class_name)
+    num_images = cfg.fal_generate.num_images or cfg.generate.num_images
     args = {
         "prompt": prompt,
         "image_size": {"height": cfg.fal_generate.height, "width": cfg.fal_generate.width},
         "guidance_scale": cfg.fal_generate.guidance_scale,
         "num_inference_steps": cfg.fal_generate.steps,
-        "num_images": cfg.fal_generate.num_images,
+        "num_images": num_images,
         "seed": cfg.generate.seed,
     }
     if lora_path:

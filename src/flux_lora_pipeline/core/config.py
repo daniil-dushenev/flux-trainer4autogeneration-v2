@@ -14,6 +14,8 @@ class DataConfig(BaseModel):
 class TrainConfig(BaseModel):
     output_dir: Path = Path("outputs")
     lora_rank: int = 16
+    lora_alpha: int | None = None
+    lora_dropout: float = 0.0
     learning_rate: float = 1e-4
     steps: int = 1000
     batch_size: int = 1
@@ -35,9 +37,10 @@ class GenerateConfig(BaseModel):
 
 
 class FluxConfig(BaseModel):
-    backend: str = "mock"  # mock | diffusers_flux2 | fal_flux2 | external
-    model_path: str = ""
+    backend: str = "diffusers_flux2_dev"  # mock | diffusers_flux2_dev | fal_flux2_dev | external
+    model_path: str = "black-forest-labs/FLUX.2-dev"
     transformer_path: str | None = None
+    use_bnb_4bit_for_inference: bool = False
     revision: str | None = None
     dtype: str = "bf16"
     device: str = "cuda"
@@ -46,9 +49,9 @@ class FluxConfig(BaseModel):
 
 class DiffusersTrainConfig(BaseModel):
     script_path: Path = Path(
-        ".third_party/diffusers/examples/dreambooth/train_dreambooth_lora_flux2_klein.py"
+        ".third_party/diffusers/examples/dreambooth/train_dreambooth_lora_flux2.py"
     )
-    pretrained_model_name_or_path: str = "black-forest-labs/FLUX.2-klein-base-4B"
+    pretrained_model_name_or_path: str = "black-forest-labs/FLUX.2-dev"
     resolution: int = 512
     train_batch_size: int = 1
     max_train_steps: int = 50
@@ -56,6 +59,14 @@ class DiffusersTrainConfig(BaseModel):
     gradient_accumulation_steps: int = 1
     gradient_checkpointing: bool = True
     cache_latents: bool = True
+    offload: bool = True
+    remote_text_encoder: bool = False
+    use_8bit_adam: bool = True
+    optimizer: str = "adamW"
+    guidance_scale: float = 1.0
+    bnb_quantization_config_path: Path | None = None
+    lr_scheduler: str = "constant_with_warmup"
+    lr_warmup_steps: int = 60
     mixed_precision: str = "bf16"
     repeats: int = 10
     seed: int = 42
@@ -63,7 +74,7 @@ class DiffusersTrainConfig(BaseModel):
 
 
 class FalTrainConfig(BaseModel):
-    app: str = "fal-ai/flux-2-trainer-v2"
+    app: str = "fal-ai/flux-2/dev/trainer"
     steps: int = 1000
     learning_rate: float = 5e-5
     default_caption: str = "a photo of {class_name}"
@@ -72,9 +83,9 @@ class FalTrainConfig(BaseModel):
 
 
 class FalGenerateConfig(BaseModel):
-    app: str = "fal-ai/flux-2/klein/4b/base/lora"
+    app: str = "fal-ai/flux-2/dev"
     lora_path: str | None = None
-    num_images: int = 4
+    num_images: int | None = None
     guidance_scale: float = 3.5
     steps: int = 30
     height: int = 768

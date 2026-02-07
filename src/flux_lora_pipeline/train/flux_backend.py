@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from pathlib import Path
 import json
 import os
+from pathlib import Path
+from typing import Any
 import subprocess
 import time
 import shutil
@@ -32,10 +33,10 @@ def train_lora(cfg: PipelineConfig) -> Path:
         out_path.write_bytes(b"PSEUDO_LORA")
         return out_path
 
-    if cfg.flux.backend == "diffusers_flux2":
-        return _train_diffusers_flux2_klein(cfg)
+    if cfg.flux.backend in {"diffusers_flux2", "diffusers_flux2_dev"}:
+        return _train_diffusers_flux2_dev(cfg)
 
-    if cfg.flux.backend == "fal_flux2":
+    if cfg.flux.backend in {"fal_flux2", "fal_flux2_dev"}:
         return _train_fal_flux2(cfg)
 
     if cfg.flux.backend == "external":
@@ -52,10 +53,13 @@ def train_lora(cfg: PipelineConfig) -> Path:
     )
 
 
-def _train_diffusers_flux2_klein(cfg: PipelineConfig) -> Path:
+def _train_diffusers_flux2_dev(cfg: PipelineConfig) -> Path:
     script_path = cfg.diffusers_train.script_path
     if not script_path.exists():
-        raise FileNotFoundError(f"Diffusers training script not found: {script_path}")
+        raise FileNotFoundError(
+            f"Diffusers training script not found: {script_path}. "
+            "Clone diffusers into .third_party/diffusers and install it in editable mode."
+        )
 
     instance_prompt = cfg.class_prompt.format(class_name=cfg.class_name)
     ensure_dir(cfg.train.output_dir)
@@ -71,6 +75,8 @@ def _train_diffusers_flux2_klein(cfg: PipelineConfig) -> Path:
     env.setdefault("TRANSFORMERS_CACHE", "/root/.cache/huggingface/hub")
     env.setdefault("ACCELERATE_CONFIG_FILE", "/root/.cache/accelerate/default_config.yaml")
     env.setdefault("TOKENIZERS_PARALLELISM", "false")
+    env.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+    _ensure_accelerate_config(Path(env["ACCELERATE_CONFIG_FILE"]), cfg.diffusers_train.mixed_precision)
 
     args = [
         "accelerate",
@@ -98,8 +104,22 @@ def _train_diffusers_flux2_klein(cfg: PipelineConfig) -> Path:
         str(cfg.diffusers_train.gradient_accumulation_steps),
         "--mixed_precision",
         cfg.diffusers_train.mixed_precision,
+        "--guidance_scale",
+        str(cfg.diffusers_train.guidance_scale),
+        "--lr_scheduler",
+        cfg.diffusers_train.lr_scheduler,
+        "--lr_warmup_steps",
+        str(cfg.diffusers_train.lr_warmup_steps),
+        "--optimizer",
+        cfg.diffusers_train.optimizer,
         "--repeats",
         str(cfg.diffusers_train.repeats),
+        "--rank",
+        str(cfg.train.lora_rank),
+        "--lora_alpha",
+        str(cfg.train.lora_alpha if cfg.train.lora_alpha is not None else cfg.train.lora_rank),
+        "--lora_dropout",
+        str(cfg.train.lora_dropout),
         "--seed",
         str(cfg.diffusers_train.seed),
         "--skip_final_inference",
@@ -108,11 +128,39 @@ def _train_diffusers_flux2_klein(cfg: PipelineConfig) -> Path:
         args.append("--gradient_checkpointing")
     if cfg.diffusers_train.cache_latents:
         args.append("--cache_latents")
+    if cfg.diffusers_train.offload:
+        args.append("--offload")
+    if cfg.diffusers_train.remote_text_encoder:
+        args.append("--remote_text_encoder")
+    if cfg.diffusers_train.use_8bit_adam:
+        args.append("--use_8bit_adam")
+    if cfg.diffusers_train.bnb_quantization_config_path:
+        args.extend(
+            [
+                "--bnb_quantization_config_path",
+                str(cfg.diffusers_train.bnb_quantization_config_path),
+            ]
+        )
 
     subprocess.run(args, check=True, env=env)
 
     # Diffusers saves LoRA weights inside output_dir
     return cfg.train.output_dir / "pytorch_lora_weights.safetensors"
+
+
+def _ensure_accelerate_config(config_path: Path, mixed_precision: str) -> None:
+    if config_path.exists():
+        return
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        from accelerate.utils import write_basic_config
+
+        write_basic_config(mixed_precision=mixed_precision, save_location=str(config_path))
+    except Exception as exc:
+        raise RuntimeError(
+            f"Failed to create accelerate config at {config_path}. "
+            "Run `accelerate config default` manually."
+        ) from exc
 
 
 def _train_fal_flux2(cfg: PipelineConfig) -> Path:
@@ -144,11 +192,7 @@ def _train_fal_flux2(cfg: PipelineConfig) -> Path:
 
     result = fal_client.subscribe(cfg.fal_train.app, arguments=args)
 
-    lora_file = result.get("diffusers_lora_file") or result.get("lora_file")
-    if isinstance(lora_file, dict):
-        lora_url = lora_file.get("url")
-    else:
-        lora_url = lora_file
+    lora_url = _extract_lora_url(result)
     if not lora_url:
         raise RuntimeError(f"fal trainer returned no LoRA url: {result}")
 
@@ -167,3 +211,30 @@ def _train_fal_flux2(cfg: PipelineConfig) -> Path:
     out_path = cfg.train.output_dir / f"{cfg.project_name}_lora.url.txt"
     out_path.write_text(lora_url)
     return out_path
+
+
+def _extract_lora_url(result: dict[str, Any]) -> str | None:
+    keys = ("diffusers_lora_file", "lora_file", "lora", "adapter", "weights")
+    for key in keys:
+        value = result.get(key)
+        if isinstance(value, str) and value.startswith(("http://", "https://")):
+            return value
+        if isinstance(value, dict):
+            url = value.get("url")
+            if isinstance(url, str) and url.startswith(("http://", "https://")):
+                return url
+
+    for value in result.values():
+        if isinstance(value, dict):
+            nested = _extract_lora_url(value)
+            if nested:
+                return nested
+        if isinstance(value, list):
+            for item in value:
+                if isinstance(item, dict):
+                    nested = _extract_lora_url(item)
+                    if nested:
+                        return nested
+                if isinstance(item, str) and item.startswith(("http://", "https://")):
+                    return item
+    return None
