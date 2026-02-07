@@ -21,15 +21,15 @@ train:
   command_workdir: null
 
 generate:
-  out_dir: "synthetic"
-  num_images: 8
-  guidance_scale: 2.5
+  out_dir: "synthetic_v2"
+  num_images: 4
+  guidance_scale: 1.5
   steps: 24
-  seed: 123
-  height: 384
-  width: 384
+  seed: 124
+  height: 512
+  width: 512
   lora_path: "outputs"
-  lora_scale: 1.0
+  lora_scale: 5.0
 
 flux:
   backend: "diffusers_flux2_dev"
@@ -44,10 +44,10 @@ flux:
 diffusers_train:
   script_path: ".third_party/diffusers/examples/dreambooth/train_dreambooth_lora_flux2.py"
   pretrained_model_name_or_path: "black-forest-labs/FLUX.2-dev"
-  resolution: 384
-  train_batch_size: 1
-  max_train_steps: 600
-  learning_rate: 0.00007
+  resolution: 748
+  train_batch_size: 8
+  max_train_steps: 200
+  learning_rate: 0.005
   gradient_accumulation_steps: 2
   gradient_checkpointing: true
   cache_latents: true
@@ -57,7 +57,7 @@ diffusers_train:
   optimizer: "adamW"
   guidance_scale: 1.0
   lr_scheduler: "constant_with_warmup"
-  lr_warmup_steps: 60
+  lr_warmup_steps: 30
   bnb_quantization_config_path: "configs/bnb_4bit_flux2.json"
   mixed_precision: "bf16"
   repeats: 1

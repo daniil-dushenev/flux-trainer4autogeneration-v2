@@ -77,3 +77,13 @@
 - `diffusers_train.lr_scheduler=constant_with_warmup`, `diffusers_train.lr_warmup_steps=60`
 - `diffusers_train.repeats=1` (для ~50 изображений это ~12 эпох)
 - `generate.lora_scale=1.0`, `generate.guidance_scale=2.5`
+
+## Публикация LoRA на Hugging Face (для ComfyUI)
+1. Авторизуйся:
+   - `hf auth login`
+2. Залей адаптер (берется `outputs/pytorch_lora_weights.safetensors`):
+   - `python scripts/push_lora_to_hf.py --repo-id <hf_username>/<repo_name> --lora-path outputs --trigger-text "a photo of Magnetic Tile crack"`
+3. Для проверки без загрузки:
+   - `python scripts/push_lora_to_hf.py --repo-id <hf_username>/<repo_name> --lora-path outputs --dry-run`
+4. Скачай в ComfyUI:
+   - `hf download <hf_username>/<repo_name> pytorch_lora_weights.safetensors --local-dir /path/to/ComfyUI/models/loras`

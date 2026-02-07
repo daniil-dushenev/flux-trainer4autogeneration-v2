@@ -23,6 +23,7 @@ dependencies = [
   "peft>=0.17.0",
   "bitsandbytes>=0.43.0",
   "safetensors>=0.4.3",
+  "huggingface_hub>=0.24.0",
   "ftfy",
   "tensorboard",
   "sentencepiece",
