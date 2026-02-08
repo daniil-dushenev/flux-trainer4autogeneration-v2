@@ -32,3 +32,5 @@ synthetic/
 # OS
 .DS_Store
 Thumbs.db
+
+loras/
