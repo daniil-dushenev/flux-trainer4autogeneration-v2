@@ -1,11 +1,11 @@
-project_name: "Magnetic Tile crack"
-class_name: "crack"
-class_prompt: "a photo of Magnetic Tile {class_name}"
+project_name: "pneumothorax"
+class_name: "pneumothorax"
+class_prompt: "a photo of Human with {class_name}"
 
 data:
-  images_dir: "/root/MT_Crack/Imgs"
+  images_dir: "/root/pneumothorax_dataset"
   captions_dir: null
-  resolution: 768
+  resolution: 512
   repeats: 1
 
 train:
@@ -15,14 +15,14 @@ train:
   lora_dropout: 0.08
   learning_rate: 0.005
   steps: 600
-  batch_size: 4
+  batch_size: 8
   seed: 42
   command: null
   command_workdir: null
 
 generate:
-  out_dir: "synthetic_v2"
-  num_images: 4
+  out_dir: "pneumothorax"
+  num_images: 50
   guidance_scale: 1.5
   steps: 24
   seed: 124
@@ -44,7 +44,7 @@ flux:
 diffusers_train:
   script_path: ".third_party/diffusers/examples/dreambooth/train_dreambooth_lora_flux2.py"
   pretrained_model_name_or_path: "black-forest-labs/FLUX.2-dev"
-  resolution: 748
+  resolution: 512
   train_batch_size: 8
   max_train_steps: 200
   learning_rate: 0.005
